@@ -1,5 +1,3 @@
-#build the artifact in GITLAB and transfer to docker image
-
 FROM alpine:3.13
 ARG VERSION=${VERSION}
 ARG OUTPUT_NAME=${OUTPUT_NAME}

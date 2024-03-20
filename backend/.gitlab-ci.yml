@@ -1,4 +1,3 @@
-#set go cache
 .go-cache:
   image: golang:1.16-alpine
   cache:
@@ -11,17 +10,17 @@
 
 variables:
   VERSION: 1.0.${CI_PIPELINE_ID}
-  OUTPUT_NAME: api #compiled binary file  
- 
+  OUTPUT_NAME: api #compiled binary file
+
 
 stages:
   - build
   - quality-testing
   - build-image
-  - release 
+  - release
   - deploy
- 
 
+#build
 build:
   stage: build
   extends: .go-cache
@@ -36,6 +35,7 @@ build:
     reports:
       dotenv: CI_JOB_ID.txt
 
+#quality-testing
 sonarqube-check:
   stage: quality-testing
   image:
@@ -54,17 +54,17 @@ sonarqube-check:
     - build
   allow_failure: true
 
-
+#build-image
 build-image:
   stage: build-image
   image: docker:20.10.16
-  variables: 
+  variables:
     DOCKER_TLS_CERTDIR: "/certs"
   services:
-    - docker:20.10.16-dind  
+    - docker:20.10.16-dind
   tags:
     - my-runner #personal runner
-  before_script:    
+  before_script:
     - until docker info; do sleep 1; done
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
@@ -79,15 +79,15 @@ build-image:
   dependencies:
     - build
 
-#release image to gitlab registry
+#release
 upload-image-latest:
   stage: release
-  image: docker:20.10.16  
-  variables: 
+  image: docker:20.10.16
+  variables:
     DOCKER_TLS_CERTDIR: "/certs"
-    GIT_STRATEGY: none 
+    GIT_STRATEGY: none
   services:
-      - docker:20.10.16-dind  
+      - docker:20.10.16-dind
   tags:
     - my-runner #personal runner
   before_script:
@@ -98,14 +98,15 @@ upload-image-latest:
     - docker tag $CI_REGISTRY_IMAGE/momo-backend:$CI_COMMIT_SHA $CI_REGISTRY_IMAGE/momo-backend:latest
     - docker push $CI_REGISTRY_IMAGE/momo-backend:latest
 
+#deploy
 deploy-app:
   stage: deploy
-  image: alpine:3.15.0 
+  image: alpine:3.15.0
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
     - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual       
+      when: manual
   before_script:
     - apk add openssh-client bash
     - eval $(ssh-agent -s)
@@ -115,23 +116,22 @@ deploy-app:
     - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
     - chmod 700 /tmp
-  #на хостовой машине экспортируем переменные с гитлаба в окружение хоста в воздаваемый файл .env с помощью скрипта
   script:
     - scp ./docker-compose.yml  ${DEV_USER}@${DEV_HOST}:/home/${DEV_USER}/
-    - ssh ${DEV_USER}@${DEV_HOST}        
+    - ssh ${DEV_USER}@${DEV_HOST}
       "/bin/bash -s " < ./backend/deploy_app.sh
 
 deploy-cluster:
   stage: deploy
   needs:
-    - upload-image-latest    
+    - upload-image-latest
   script:
-    - "curl -X POST --fail --form token=${INFRA_TRIGGER_TOKEN} --form ref=develop https://gitlab.praktikum-services.ru/api/v4/projects/${INFRA_PROJECT_ID}/trigger/pipeline"    
+    - "curl -X POST --fail --form token=${INFRA_TRIGGER_TOKEN} --form ref=develop https://gitlab.praktikum-services.ru/api/v4/projects/${INFRA_PROJECT_ID}/trigger/pipeline"
 
 #release artifact to nexus repository
 upload-release:
   stage: release
-  only: 
+  only:
     changes:
       - backend/*
   script:

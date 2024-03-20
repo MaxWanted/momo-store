@@ -2,7 +2,7 @@ variables:
   VERSION: 1.0.${CI_PIPELINE_ID}
   OUTPUT_NAME: momo-store #tar.gz name
 
-stages:  
+stages:
   - build
   - quality-testing
   - build-image
@@ -15,8 +15,8 @@ build:
     - cd frontend
     - npm install
     - npm run build
-    - mkdir -p momo-store-${VERSION}/public_html     
-    - mv dist/* momo-store-${VERSION}/public_html        
+    - mkdir -p momo-store-${VERSION}/public_html
+    - mv dist/* momo-store-${VERSION}/public_html
   artifacts:
     paths:
       - frontend/momo-store-${VERSION}/public_html
@@ -42,20 +42,20 @@ sonarqube-check:
 build-image:
   stage: build-image
   image: docker:20.10.16
-  variables: 
+  variables:
     DOCKER_TLS_CERTDIR: "/certs"
   services:
     - docker:20.10.16-dind
   tags:
-    - my-runner #personal runner 
+    - my-runner #personal runner
   before_script:
     - until docker info; do sleep 1; done
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - cd frontend    
+    - cd frontend
     - >
       docker build
-      --build-arg VERSION=${VERSION}      
+      --build-arg VERSION=${VERSION}
       --tag $CI_REGISTRY_IMAGE/momo-frontend:$CI_COMMIT_SHA
       .
     - docker push $CI_REGISTRY_IMAGE/momo-frontend:$CI_COMMIT_SHA
@@ -64,15 +64,15 @@ build-image:
 
 #release image to gitlab registry
 upload-image-latest:
-  stage: release  
+  stage: release
   image: docker:20.10.16
-  variables: 
+  variables:
     DOCKER_TLS_CERTDIR: "/certs"
-    GIT_STRATEGY: none  
+    GIT_STRATEGY: none
   services:
     - docker:20.10.16-dind
   tags:
-    - my-runner #personal runner    
+    - my-runner #personal runner
   before_script:
     - until docker info; do sleep 1; done
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
@@ -84,12 +84,12 @@ upload-image-latest:
 
 deploy:
   stage: deploy
-  image: alpine:3.15.0 
+  image: alpine:3.15.0
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: manual
     - if: '$CI_COMMIT_BRANCH == "main"'
-      when: manual    
+      when: manual
   before_script:
     - apk add openssh-client bash
     - eval $(ssh-agent -s)
@@ -99,16 +99,15 @@ deploy:
     - echo "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
     - chmod 644 ~/.ssh/known_hosts
     - chmod 700 /tmp
-  #на хостовой машине экспортируем переменные с гитлаба в окружение хоста в воздаваемый файл .env с помощью скрипта 11
   script:
     - scp ./docker-compose.yml  ${DEV_USER}@${DEV_HOST}:/home/${DEV_USER}/
-    - ssh ${DEV_USER}@${DEV_HOST}        
+    - ssh ${DEV_USER}@${DEV_HOST}
       "/bin/bash -s " < ./frontend/deploy_app.sh
 
 deploy-cluster:
   stage: deploy
   needs:
-    - upload-image-latest    
+    - upload-image-latest
   script:
     - "curl -X POST --fail --form token=${INFRA_TRIGGER_TOKEN} --form ref=develop https://gitlab.praktikum-services.ru/api/v4/projects/${INFRA_PROJECT_ID}/trigger/pipeline"
 
